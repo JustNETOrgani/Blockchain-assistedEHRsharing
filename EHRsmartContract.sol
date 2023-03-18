@@ -121,7 +121,7 @@ contract EHRsharingSC {
         string memory ipfsHash = patientData[computedPHIDs[pos]].PatientIPFShash;
         bytes memory RS = patientData[computedPHIDs[pos]].RingSig;
         bytes32 pID = patientData[computedPHIDs[pos]].PatientPHID;
-        return (pID,ipfsHash,RS); // Sig verification can later be done.
+        return (pID,ipfsHash,RS); // Sig verification can later be done at frontend app.
     }
 
     // Helper functions
