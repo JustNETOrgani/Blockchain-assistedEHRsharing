@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.18;
 // A Smart Contract to to be deployed by MoH.
 // Contract begins. 
 contract EHRsharingSC {
     // Structs to be used in the contract.
-    struct registeredHF{
+    struct RegisteredHf{
         string nameOfHF; // Name of the HF.
         address addrOfHF; // Blockchain address of the HF.
         string pubKey; // Sample public key of HF.
-		stateOfHF hfState; // State of the HF.
+		StateofHf hfState; // State of the HF.
     }
 
-    struct patient{
+    struct Patient{
         bytes32 PatientPHID; // Dynamic identifier of patient. Based on H(HashedID||addrOfHF)
         string PatientIPFShash; // IPFS pointer.
 		bytes RingSig; // Ring signature....POC.
@@ -22,17 +22,17 @@ contract EHRsharingSC {
     string[] pubKeysOfHFs; // Public keys of HFs.
     address[] addrOfHFs; // Blockchain address of HFs.
 	
-	enum stateOfHF {Registered, Unregistered} // States that HFs could be. 
+	enum StateofHf {Registered, Unregistered} // States that HFs could be. 
  
-    address MoHaddr; // Contract deployer = MoH.
+    address immutable moAddr; // Contract deployer = MoH.
     uint256 numOfHFsRegistered; // Total registered HFs.
     
     // Mappings.
-    mapping (address => registeredHF)  public healthFacility; // Mapping for registered HFs.
-    mapping (bytes32 => patient)  public patientData; // Mapping for registered HFs.
+    mapping (address => RegisteredHf)  public healthFacility; // Mapping for registered HFs.
+    mapping (bytes32 => Patient)  public patientData; // Mapping for registered HFs.
 	
 	// Public states.
-    stateOfHF public stateOfTheHF;
+    StateofHf public stateOfTheHF;
 	
     // Events begin.
     event MoHscDeployment(string deployMsg);
@@ -41,27 +41,27 @@ contract EHRsharingSC {
     
     // Constructor for the contract.
     constructor() {
-        MoHaddr = msg.sender;
-		stateOfTheHF = stateOfHF.Unregistered;
+        moAddr = msg.sender;
+		stateOfTheHF = StateofHf.Unregistered;
 		numOfHFsRegistered = 0;
 		emit MoHscDeployment("MoH SC deployed");
     }
     
     // Creating an access modifier for contractDeployer
-    modifier MoH {
-     require(msg.sender == MoHaddr);
+    modifier moH {
+     require(msg.sender == moAddr);
      _;
      }
     
     // Access modifier for HF only.
-    modifier RegisteredHFOnly {
+    modifier registeredHfonly {
      require(healthFacility[msg.sender].addrOfHF != address(0), "Unregistered HF"); // Access is restricted to registered HF only.
      _;
      }
      
     // Function to authenticate MoH login via MetaMask.
     function checkMoHaddr() public view returns (bool) {
-        if (msg.sender == MoHaddr) {
+        if (msg.sender == moAddr) {
             return true;
         }
         else {
@@ -70,30 +70,31 @@ contract EHRsharingSC {
     }
 
     // Function to register an HF.
-    function registerHF(string memory _nameOfHF,address _addrOfHF, string memory _pubKey) MoH public returns (bool){
-        healthFacility[_addrOfHF] = registeredHF(_nameOfHF, _addrOfHF, _pubKey, stateOfHF.Registered);
-        pubKeysOfHFs.push(_pubKey);
-        addrOfHFs.push(_addrOfHF);
+    function registerHf(string memory namefHf,address addrofHf, string memory pubKey) moH public returns (bool){
+        healthFacility[addrofHf] = RegisteredHf(namefHf, addrofHf, pubKey, StateofHf.Registered);
+        pubKeysOfHFs.push(pubKey);
+        addrOfHFs.push(addrofHf);
         numOfHFsRegistered +=1;
-        emit HFRegistered(_addrOfHF, _nameOfHF); // Emit event on registeration of an HF. 
+        emit HFRegistered(addrofHf, namefHf); // Emit event on registeration of an HF. 
         return true;
     }
     
     // Function to get total number of HFs registered.
-    function totalRegisteredHFs() public view returns (uint256) {
+    function totalRegisteredhfs() public view returns (uint256) {
         return numOfHFsRegistered;
     }
     
     // Function to get HF details. Only registered HFs can call.
-    function getHFInfo() RegisteredHFOnly public view returns (string memory, address, stateOfHF) {
+    function getHfinfo() registeredHfonly public view returns (string memory, address, StateofHf) {
         return (healthFacility[msg.sender].nameOfHF, healthFacility[msg.sender].addrOfHF, healthFacility[msg.sender].hfState);
     }
 
     // Function to get HF details. Only registered HFs can call.
-    function releasePubKeys(uint256 numReq) RegisteredHFOnly public view returns (string[] memory releasedPubs) {
+    function releasePubKeys(uint256 numReq) registeredHfonly public view returns (string[] memory releasedPubs) {
         require(numReq <= pubKeysOfHFs.length, "Insufficent Public keys");
         string[] memory pubs = new string[](numReq); // Create and init temp array.
-        for(uint256 i = 0; i < pubKeysOfHFs.length; i++){ 
+        uint array_length = pubKeysOfHFs.length; //  cache it in some local variable
+        for(uint256 i = 0; i < array_length; i++){ 
             pubs[i]=pubKeysOfHFs[i];
             if(i==numReq-1){
                 return pubs;
@@ -102,15 +103,15 @@ contract EHRsharingSC {
     }
 
     // HF transaction.
-    function transactHF(bytes32 _PHID,string memory _IPFShash,bytes memory _RingSig,bytes32 _hEncEHR, uint256 timestamp) RegisteredHFOnly public returns (bool){
-        patientData[_PHID] = patient(_PHID, _IPFShash, _RingSig, _hEncEHR,timestamp);
+    function transactHf(bytes32 phid,string memory ipfsHash, bytes memory ringSig,bytes32 hEncehr, uint256 timestamp) registeredHfonly public returns (bool){
+        patientData[phid] = Patient(phid, ipfsHash, ringSig, hEncehr,timestamp);
         emit HFtransactionDone("HF transaction done"); // Emit event on HF transaction sucess. 
         return true;
     }
 
     // Retrieve patient records....Patient finder function
     function patientFinder(bytes32 hashedID) public view returns (bytes32 PHID, string memory IPFShash,bytes memory RingSig){
-        bytes32[] memory computedPHIDs = computePHIDs(hashedID);
+        bytes32[] memory computedPHIDs = computePhids(hashedID);
         uint256[] memory timestamps = new uint256[](computedPHIDs.length);
         for(uint256 i = 0; i < computedPHIDs.length; i++){ 
             timestamps[i] = patientData[computedPHIDs[i]].timestamp;
@@ -125,9 +126,10 @@ contract EHRsharingSC {
     }
 
     // Helper functions
-    function computePHIDs(bytes32 hashedID) internal view returns (bytes32[] memory computedPHIDs){
+    function computePhids(bytes32 hashedID) internal view returns (bytes32[] memory computedPHIDs){
         bytes32[] memory tempPHIDs = new bytes32[](addrOfHFs.length);
-        for(uint256 i = 0; i < addrOfHFs.length; i++){ 
+        uint addr_length = addrOfHFs.length; //  cache it in some local variable
+        for(uint256 i = 0; i < addr_length; i++){ 
             tempPHIDs[i] = keccak256(abi.encode(hashedID,addrOfHFs[i])); // abi.encode instead of abi.encodePacked prevents possible collision.
         }
         return tempPHIDs;
